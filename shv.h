@@ -80,6 +80,11 @@ ShvSvmSetupVmcb (
     );
 
 VOID
+ShvSvmNptInitialize (
+    _In_ PSHV_VP_DATA VpData
+    );
+
+VOID
 ShvSvmFillSegment (
     _Out_ PVMCB_SEGMENT Segment,
     _In_ VOID* GdtBase,

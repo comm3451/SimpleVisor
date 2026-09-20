@@ -74,11 +74,21 @@ typedef struct _SHV_VP_DATA
     DECLSPEC_ALIGN(PAGE_SIZE) VMCB HostVmcb;
     DECLSPEC_ALIGN(PAGE_SIZE) UINT8 HostStateArea[PAGE_SIZE];
 
+    //
+    // Nested page tables: a 512GB identity map built from 2MB pages. These use
+    // the ordinary x64 page-table format. NptPde is 2MB of tables, so this is
+    // the bulk of the per-VP allocation.
+    //
+    DECLSPEC_ALIGN(PAGE_SIZE) UINT64 NptPml4[NPT_PML4E_COUNT];
+    DECLSPEC_ALIGN(PAGE_SIZE) UINT64 NptPdpt[NPT_PDPTE_COUNT];
+    DECLSPEC_ALIGN(PAGE_SIZE) UINT64 NptPde[NPT_PDPTE_COUNT][NPT_PDE_COUNT];
+
     SHV_GUEST_REGISTERS GuestRegs;
 
     UINT64 GuestVmcbPa;
     UINT64 HostVmcbPa;
     UINT64 HostStateAreaPa;
+    UINT64 NptPml4Pa;
 } SHV_VP_DATA, *PSHV_VP_DATA;
 
 VOID

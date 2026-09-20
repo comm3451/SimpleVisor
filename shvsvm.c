@@ -84,6 +84,41 @@ ShvSvmFillSegment (
     }
 }
 
+VOID
+ShvSvmNptInitialize (
+    _In_ PSHV_VP_DATA VpData
+    )
+{
+    UINT32 i, j;
+
+    //
+    // Point the single top-level entry at the PDPT. Nested page tables use the
+    // ordinary x64 format, so each level is Present + Writable + User.
+    //
+    VpData->NptPml4[0] = ShvOsGetPhysicalAddress(&VpData->NptPdpt) |
+                         NPT_PAGE_PRESENT | NPT_PAGE_WRITE | NPT_PAGE_USER;
+
+    //
+    // Each PDPT entry points at one page-directory, and every PDE maps a 2MB
+    // page whose guest-physical address equals its system-physical address (an
+    // identity map). Cache type is left to combine with the guest's own PAT and
+    // MTRRs, which already mark RAM write-back and MMIO uncacheable.
+    //
+    for (i = 0; i < NPT_PDPTE_COUNT; i++)
+    {
+        VpData->NptPdpt[i] = ShvOsGetPhysicalAddress(&VpData->NptPde[i][0]) |
+                             NPT_PAGE_PRESENT | NPT_PAGE_WRITE | NPT_PAGE_USER;
+
+        for (j = 0; j < NPT_PDE_COUNT; j++)
+        {
+            VpData->NptPde[i][j] =
+                ((UINT64)((i * NPT_PDE_COUNT) + j) * _2MB) |
+                NPT_PAGE_PRESENT | NPT_PAGE_WRITE | NPT_PAGE_USER |
+                NPT_PAGE_LARGE;
+        }
+    }
+}
+
 UINT8
 ShvSvmProbe (
     VOID
@@ -126,6 +161,7 @@ ShvSvmSetupVmcb (
     PVMCB vmcb = &VpData->GuestVmcb;
     PVMCB_CONTROL_AREA control = &vmcb->ControlArea;
     PVMCB_STATE_SAVE_AREA save = &vmcb->StateSaveArea;
+    INT32 cpuInfo[4];
 
     //
     // Snapshot the live FS/GS/TR/LDTR segments and the SYSCALL/SYSENTER MSRs
@@ -144,14 +180,31 @@ ShvSvmSetupVmcb (
     control->InterceptVector5 = SVM_INTERCEPT_VMRUN;
 
     //
-    // A non-zero ASID is required. Nested paging is left disabled: the guest
-    // keeps its own page tables and guest-physical addresses map straight
-    // through to system-physical addresses.
+    // A non-zero ASID is required. Disable VMCB state caching so any later
+    // change (for example toggling a nested page's permissions for a hook) is
+    // always picked up.
     //
     control->GuestAsid = 1;
     control->TlbControl = 0;
-    control->NpEnable = 0;
     control->VmcbClean = 0;
+
+    //
+    // Enable nested paging if the processor supports it, pointing the nested
+    // CR3 at the identity map built by ShvSvmNptInitialize. With a plain
+    // identity map this is transparent, but it is the foundation an NPT-based
+    // memory hook builds on. If NP is unsupported, the guest simply runs with
+    // guest-physical mapping straight through to system-physical.
+    //
+    __cpuid(cpuInfo, CPUID_SVM_FEATURES);
+    if ((cpuInfo[3] & CPUID_SVM_FEATURE_NP) != 0)
+    {
+        control->NpEnable = SVM_NP_ENABLE;
+        control->NCr3 = VpData->NptPml4Pa;
+    }
+    else
+    {
+        control->NpEnable = 0;
+    }
 
     //
     // Fill the guest segments that VMSAVE does not cover (ES/CS/SS/DS).
@@ -205,6 +258,13 @@ ShvSvmLaunchOnVp (
     VpData->GuestVmcbPa = ShvOsGetPhysicalAddress(&VpData->GuestVmcb);
     VpData->HostVmcbPa = ShvOsGetPhysicalAddress(&VpData->HostVmcb);
     VpData->HostStateAreaPa = ShvOsGetPhysicalAddress(&VpData->HostStateArea);
+    VpData->NptPml4Pa = ShvOsGetPhysicalAddress(&VpData->NptPml4);
+
+    //
+    // Build the nested page table identity map before it is referenced by the
+    // VMCB's nested CR3.
+    //
+    ShvSvmNptInitialize(VpData);
 
     //
     // Enable SVM and program the host state-save area MSR.

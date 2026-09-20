@@ -84,7 +84,26 @@ Environment:
 //
 #define VMEXIT_CPUID            0x72
 #define VMEXIT_VMRUN            0x80
+#define VMEXIT_NPF              0x400   // Nested page fault (used by NPT hooks)
 #define VMEXIT_INVALID          (-1)
+
+//
+// Nested paging (NPT). AMD nested page tables use the ordinary x64 page-table
+// format, so the identity map below is built from plain PML4/PDPT/PD entries.
+//
+#define CPUID_SVM_FEATURE_NP    (1 << 0)    // CPUID 8000000Ah, EDX bit 0
+#define SVM_NP_ENABLE           (1ULL << 0) // VMCB ControlArea.NpEnable bit 0
+
+#define _2MB                    (2 * 1024 * 1024)
+#define NPT_PML4E_COUNT         512
+#define NPT_PDPTE_COUNT         512
+#define NPT_PDE_COUNT           512
+
+#define NPT_PAGE_PRESENT        (1ULL << 0)
+#define NPT_PAGE_WRITE          (1ULL << 1)
+#define NPT_PAGE_USER           (1ULL << 2)
+#define NPT_PAGE_LARGE          (1ULL << 7)  // 2MB page (in a PDE)
+#define NPT_PAGE_NX             (1ULL << 63) // No-execute
 
 typedef struct _KDESCRIPTOR
 {

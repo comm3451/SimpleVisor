@@ -25,10 +25,12 @@ have been removed, so the whole thing is one small NT driver.
   (`svm.h`, `shvsvm.c`, `shvsvmhv.c`, `shvsvmx64.asm`).
 * The UEFI target was dropped. The project is now a single `NT|x64`
   configuration.
-* EPT/VPID (Intel second-level address translation) is gone. This port does
-  **not** enable AMD Nested Page Tables (NPT); the guest keeps its own page
-  tables and guest-physical maps straight through to system-physical, which is
-  all a live-system hyperjack needs. NPT is an obvious next extension.
+* EPT/VPID (Intel second-level address translation) is gone. In its place the
+  port enables AMD Nested Page Tables (NPT) with a 512GB identity map built from
+  2MB pages (guest-physical maps straight through to system-physical). With a
+  plain identity map this is transparent, but it is the foundation an NPT-based
+  memory hook builds on. If the processor lacks nested-paging support, the
+  driver falls back to running without NPT.
 * The OS layer (`shv.c`, `shvvp.c`, `nt/shvos.c`, `nt/shvosx64.asm`) and the
   load / unload skeleton are kept from upstream, largely unchanged.
 
@@ -39,8 +41,9 @@ The lifecycle mirrors the original SimpleVisor, with SVM in place of VMX:
 1. `ShvLoad` broadcasts a Generic DPC to every logical processor.
 2. On each processor, the current register state is captured with
    `RtlCaptureContext`. SVM is enabled (`EFER.SVME`), a host state-save area is
-   programmed (`VM_HSAVE_PA`), and a guest VMCB is built from the captured
-   state.
+   programmed (`VM_HSAVE_PA`), a nested page table identity map is built and
+   pointed to by the VMCB's nested CR3, and a guest VMCB is built from the
+   captured state.
 3. `VMSAVE` snapshots the live FS/GS/TR/LDTR and SYSCALL/SYSENTER MSRs into the
    VMCB; the remaining guest state (ES/CS/SS/DS, control registers, GDTR/IDTR,
    RIP/RSP/RFLAGS) is filled in by hand.
