@@ -157,4 +157,26 @@ GrR15   equ 068h
     ret
     ShvSvmVmsave ENDP
 
+;
+; VOID ShvSvmVmload(UINT64 VmcbPa);
+;   rcx = physical address of a VMCB
+;
+; Loads the FS/GS/TR/LDTR and SYSCALL/SYSENTER MSRs from the VMCB.
+;
+    ShvSvmVmload PROC
+    mov     rax, rcx
+    db      0Fh, 01h, 0DAh          ; vmload rax
+    ret
+    ShvSvmVmload ENDP
+
+;
+; VOID ShvSvmStgi(VOID);
+;
+; Sets the Global Interrupt Flag. Only valid while EFER.SVME is set.
+;
+    ShvSvmStgi PROC
+    db      0Fh, 01h, 0DCh          ; stgi
+    ret
+    ShvSvmStgi ENDP
+
     end

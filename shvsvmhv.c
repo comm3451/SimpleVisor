@@ -59,15 +59,33 @@ ShvSvmResumeGuestWithoutHypervisor (
     context.EFlags = (UINT32)vmcb->StateSaveArea.Rflags;
 
     //
-    // Restore the descriptor table limits (which SVM does not fully account
-    // for versus what PatchGuard expects), then disable SVM and hand the
-    // logical processor back to the guest at the recorded RIP. With SVM
-    // disabled the Global Interrupt Flag no longer applies, so masking
-    // interrupts here and letting the restore re-enable them via the guest
-    // RFLAGS keeps the hand-off atomic.
+    // Restore the descriptor table limits, then hand the processor back to the
+    // guest with SVM disabled.
     //
     ShvOsUnprepareProcessor(VpData);
+
+    //
+    // The host FS/GS/TR/LDTR, KernelGsBase and SYSCALL/SYSENTER MSRs are
+    // currently live (they were reloaded after the last VM exit). Reload the
+    // guest copies so the guest resumes with its own segment state. This must
+    // happen while SVM is still enabled.
+    //
+    ShvSvmVmload(VpData->GuestVmcbPa);
+
+    //
+    // Set the Global Interrupt Flag before disabling SVM. On a VM exit the GIF
+    // is cleared, so interrupt delivery does not resume until STGI runs, and
+    // STGI is only valid while EFER.SVME is set. Interrupts stay masked (IF=0
+    // via _disable) until ShvOsRestoreContext restores the guest RFLAGS, so the
+    // hand-off is atomic. Skipping STGI would leave interrupts globally blocked
+    // and hang the processor after unload.
+    //
     _disable();
+    ShvSvmStgi();
+
+    //
+    // Now disable SVM and return to the (no longer virtualized) guest.
+    //
     __writemsr(MSR_EFER, __readmsr(MSR_EFER) & ~EFER_SVME);
     __writecr3(vmcb->StateSaveArea.Cr3);
     ShvOsRestoreContext(&context);

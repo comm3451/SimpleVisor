@@ -123,6 +123,16 @@ ShvSvmVmsave (
     _In_ UINT64 VmcbPa
     );
 
+VOID
+ShvSvmVmload (
+    _In_ UINT64 VmcbPa
+    );
+
+VOID
+ShvSvmStgi (
+    VOID
+    );
+
 //
 // OS Layer
 //
