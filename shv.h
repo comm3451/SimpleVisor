@@ -1,6 +1,7 @@
 /*++
 
 Copyright (c) Alex Ionescu.  All rights reserved.
+Copyright (c) SimpleVisor contributors.  AMD64 SVM port.
 
 Header Name:
 
@@ -8,11 +9,8 @@ Header Name:
 
 Abstract:
 
-    This header defines the structures and functions of the Simple Hyper Visor.
-
-Author:
-
-    Alex Ionescu (@aionescu) 14-Mar-2016 - Initial version
+    This header defines the structures and functions of the Simple Hyper Visor
+    (AMD64 / SVM edition).
 
 Environment:
 
@@ -32,16 +30,6 @@ Environment:
 #include "ntint.h"
 #include "shv_x.h"
 
-typedef struct _SHV_VP_STATE
-{
-    PCONTEXT VpRegs;
-    uintptr_t GuestRip;
-    uintptr_t GuestRsp;
-    uintptr_t GuestEFlags;
-    UINT16 ExitReason;
-    UINT8 ExitVm;
-} SHV_VP_STATE, *PSHV_VP_STATE;
-
 typedef struct _SHV_CALLBACK_CONTEXT
 {
     UINT64 Cr3;
@@ -53,59 +41,81 @@ typedef struct _SHV_CALLBACK_CONTEXT
 SHV_CPU_CALLBACK ShvVpLoadCallback;
 SHV_CPU_CALLBACK ShvVpUnloadCallback;
 
-VOID
-ShvVmxEntry (
-    VOID
-    );
-
-INT32
-ShvVmxLaunchOnVp (
-    _In_ PSHV_VP_DATA VpData
-    );
-
-VOID
-ShvUtilConvertGdtEntry (
-    _In_ VOID* GdtBase,
-    _In_ UINT16 Offset,
-    _Out_ PVMX_GDTENTRY64 VmxGdtEntry
-    );
-
-UINT32
-ShvUtilAdjustMsr (
-    _In_ LARGE_INTEGER ControlValue,
-    _In_ UINT32 DesiredValue
-    );
-
+//
+// Virtual processor management (shvvp.c)
+//
 PSHV_VP_DATA
 ShvVpAllocateData (
     _In_ UINT32 CpuCount
     );
 
 VOID
-ShvVpFreeData  (
+ShvVpFreeData (
     _In_ PSHV_VP_DATA Data,
     _In_ UINT32 CpuCount
-    );
-
-INT32
-ShvVmxLaunch (
-    VOID
-    );
-
-UINT8
-ShvVmxProbe (
-    VOID
-    );
-
-VOID
-ShvVmxEptInitialize (
-    _In_ PSHV_VP_DATA VpData
     );
 
 DECLSPEC_NORETURN
 VOID
 ShvVpRestoreAfterLaunch (
     VOID
+    );
+
+//
+// AMD SVM engine (shvsvm.c / shvsvmhv.c)
+//
+UINT8
+ShvSvmProbe (
+    VOID
+    );
+
+INT32
+ShvSvmLaunchOnVp (
+    _In_ PSHV_VP_DATA VpData
+    );
+
+VOID
+ShvSvmSetupVmcb (
+    _In_ PSHV_VP_DATA VpData
+    );
+
+VOID
+ShvSvmFillSegment (
+    _Out_ PVMCB_SEGMENT Segment,
+    _In_ VOID* GdtBase,
+    _In_ UINT16 Selector
+    );
+
+DECLSPEC_NORETURN
+VOID
+ShvSvmVmexitLoop (
+    _In_ PSHV_VP_DATA VpData
+    );
+
+VOID
+ShvSvmHandleExit (
+    _In_ PSHV_VP_DATA VpData
+    );
+
+//
+// AMD SVM assembly support (shvsvmx64.asm)
+//
+DECLSPEC_NORETURN
+VOID
+ShvSvmLaunch (
+    _In_ PSHV_VP_DATA VpData
+    );
+
+VOID
+ShvSvmRun (
+    _In_ PSHV_GUEST_REGISTERS Regs,
+    _In_ UINT64 GuestVmcbPa,
+    _In_ UINT64 HostVmcbPa
+    );
+
+VOID
+ShvSvmVmsave (
+    _In_ UINT64 VmcbPa
     );
 
 //
@@ -159,26 +169,14 @@ ShvOsGetPhysicalAddress (
     _In_ VOID* BaseAddress
     );
 
-#ifndef __BASE_H__
 VOID
 ShvOsDebugPrint (
     _In_ const char* Format,
     ...
     );
-#else
-VOID
-ShvOsDebugPrintWide (
-    _In_ const CHAR16* Format,
-    ...
-    );
-#define ShvOsDebugPrint(format, ...) ShvOsDebugPrintWide(_CRT_WIDE(format), __VA_ARGS__)
-#endif
 
 VOID
 ShvOsRunCallbackOnProcessors (
     _In_ PSHV_CPU_CALLBACK Routine,
     _In_opt_ VOID* Context
     );
-
-extern PSHV_VP_DATA* ShvGlobalData;
-

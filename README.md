@@ -1,6 +1,23 @@
-# SimpleVisor
+# SimpleVisor (AMD64 / SVM edition)
 
-SimpleVisor is a simple, portable, Intel x64/EM64T VT-x specific hypervisor with two specific goals: using the least amount of assembly code (10 lines), and having the smallest amount of VMX-related code to support dynamic hyperjacking and unhyperjacking (that is, virtualizing the host state from within the host) while also supporting advanced features such as EPT and VPID. It currently runs on both Windows and in UEFI environments.
+This is an **AMD-only** fork of SimpleVisor, ported from Intel VT-x to AMD-V
+(SVM) and trimmed down to build as a single Windows kernel driver in Visual
+Studio 2022. It keeps the original project's goal of being the smallest,
+clearest possible reference hypervisor: it hyperjacks the running Windows
+system into a guest, virtualizes it from within, and can be unloaded again at
+runtime. The Intel VT-x and UEFI code paths from upstream have been removed.
+
+> **Status: untested reference code.** The SVM engine was written against the
+> AMD64 Architecture Programmer's Manual, Volume 2, but has not yet been
+> compiled with the WDK or run on hardware. Treat it as a starting point that
+> must be validated (and very likely debugged) on a real AMD machine or under
+> nested virtualization. A misconfigured VMCB on AMD surfaces as a
+> `VMEXIT_INVALID`, which the exit handler turns into a clean load failure
+> rather than a crash, but on-hardware validation is still required. For a
+> battle-tested AMD reference in the same spirit, compare against Satoshi
+> Tanda's SimpleSvm (https://github.com/tandasat/SimpleSvm).
+
+SimpleVisor was originally a simple, portable, Intel x64/EM64T VT-x specific hypervisor with two specific goals: using the least amount of assembly code, and having the smallest amount of virtualization-related code to support dynamic hyperjacking and unhyperjacking (that is, virtualizing the host state from within the host).
 
 ## Introduction
 
@@ -10,20 +27,27 @@ Not counting the exhaustive comments which explain every single line of code, an
 
 Additionally, SimpleVisor utilizes a lightweight OS-library for Windows-specific functionality, separating out the hypervisor pieces from the Windows-specific pieces. Leveraging this portable design, a UEFI version of SimpleVisor is also now available. Note however, that it does not have robust support for MP environments due to issues with UEFI, and that loading an operating system will eventually result in a crash as the OS will hit unimplemented code paths due to its re-configuration of processor resources. Virtualizing the entire boot of the operating system from UEFI is beyond the scope of the project.
 
-SimpleVisor can be built with Visual Studio 2015 Update 3, and while older/newer compilers have not been tested and are not supported, it's likely that they can build the project as well. It's important, however, to keep the various compiler and linker settings as you see them, however.
+This AMD edition is built with **Visual Studio 2022** and the matching Windows
+Driver Kit (WDK). Install the "Desktop development with C++" workload, the
+Windows SDK, and the WDK (plus its Visual Studio extension) so the
+`WindowsKernelModeDriver10.0` platform toolset is available. Open `shv.sln`,
+select the `NT|x64` configuration, and build. Keep the existing compiler and
+linker settings (`nt/nt.props`, `nt/nt.default.props`) as they are.
 
-SimpleVisor has currently been tested on the following platforms successfully:
+Requirements to run:
 
-* Windows 8.1 on a Haswell Processor (Custom Desktop)
-* Windows 10 Redstone 1 on a Sandy Bridge Processor (Samsung 930 Laptop)
-* Windows 10 Threshold 2/Redstone 1 on a Skylake Processor (Surface Pro 4 Tablet)
-* Windows 10 Threshold 2 on a Skylake Processor (Dell Inspiron 11-3153 w/ SGX)
-* VMWare Workstation 11, but without EPT (VMWare does not support 1GB EPTs)
-* UEFI 2.4 on an Asus Maximus VII Extreme Motherboard (Custom Desktop)
+* An AMD (or compatible) x64 processor with SVM support (`CPUID
+  Fn8000_0001_ECX[SVM]`), and SVM not disabled/locked by firmware (some BIOSes
+  hide it behind an "SVM Mode" or "AMD-V" option).
+* 64-bit Windows. x86 Windows is not supported.
+* No other hypervisor already owning SVM. If Hyper-V, Virtualization Based
+  Security / Memory Integrity, WSL2, or a Credential Guard stack is active, the
+  firmware/OS hypervisor holds SVM and this driver will not load. Disable them
+  (or test in a VM configured for nested SVM) first.
 
-At this time, it has not been tested on Bochs, but there's no reason why SimpleVisor could not run in such an environment as well. However, if your machine is already running under a hypervisor such as Hyper-V or Xen, SimpleVisor will not load.
-
-Keep in mind that x86 versions of Windows are expressly not supported, nor are processors earlier than the Nehalem microarchitecture, nor is Windows 7. Support for the latter two is easy to add and exists in certain forks.
+Because virtualizing a live Windows system from a driver is inherently risky,
+validate on a dedicated test machine or a snapshotted VM, with a kernel
+debugger attached, before trusting it anywhere else.
 
 ## Motivation
 
