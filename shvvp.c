@@ -144,9 +144,9 @@ ShvVpInitialize (
     {
         //
         // If the AC bit is not set in EFLAGS, it means that we have not yet
-        // launched the VM. Attempt to initialize VMX on this processor.
+        // launched the VM. Attempt to initialize SVM on this processor.
         //
-        status = ShvVmxLaunchOnVp(Data);
+        status = ShvSvmLaunchOnVp(Data);
     }
 
     //
@@ -232,10 +232,10 @@ ShvVpLoadCallback (
     vpData = NULL;
 
     //
-    // Detect if the hardware appears to support VMX root mode to start.
-    // No attempts are made to enable this if it is lacking or disabled.
+    // Detect if the hardware appears to support SVM to start. No attempts are
+    // made to enable it if it is lacking or disabled in firmware.
     //
-    if (!ShvVmxProbe())
+    if (!ShvSvmProbe())
     {
         status = SHV_STATUS_NOT_AVAILABLE;
         goto Failure;
@@ -250,13 +250,6 @@ ShvVpLoadCallback (
         status = SHV_STATUS_NO_RESOURCES;
         goto Failure;
     }
-
-    //
-    // First, capture the value of the PML4 for the SYSTEM process, so that all
-    // virtual processors, regardless of which process the current LP has
-    // interrupted, can share the correct kernel address space.
-    //
-    vpData->SystemDirectoryTableBase = Context->Cr3;
 
     //
     // Initialize the virtual processor
