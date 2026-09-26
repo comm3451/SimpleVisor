@@ -75,6 +75,20 @@ Windows SDK, and the WDK (plus its Visual Studio extension) so the
 select the `NT|x64` configuration, and build. Keep the existing compiler and
 linker settings (`nt/nt.props`, `nt/nt.default.props`) as they are.
 
+## Testing and debugging
+
+Loading this driver takes over the CPU's virtualization engine on every logical
+processor, so a bug can reboot or hard-freeze the whole machine with no blue
+screen. Test only in a snapshotted virtual machine (with nested AMD-V) or on a
+throwaway spare AMD PC, never on your main system.
+
+[`docs/DEBUGGING.md`](docs/DEBUGGING.md) is a step-by-step guide for beginners:
+building the driver, preparing a safe test VM, freeing SVM from any other
+hypervisor, test-signing and installing, attaching WinDbg for kernel debugging,
+seeing the driver's output, the hypervisor-specific debugging techniques (why
+you cannot breakpoint the exit handler, and what to do instead), and reading
+crashes with a symptom-to-cause table.
+
 ## Requirements to run
 
 * An AMD (or compatible) x64 processor with SVM support
